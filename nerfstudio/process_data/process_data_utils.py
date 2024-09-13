@@ -33,6 +33,7 @@ except ImportError:
 import numpy as np
 
 from nerfstudio.utils.rich_utils import CONSOLE, status
+from nerfstudio.utils.socket_api import send_api_message
 from nerfstudio.utils.scripts import run_command
 
 POLYCAM_UPSCALING_TIMES = 2
@@ -151,22 +152,29 @@ def convert_video_to_images(
 
     for i in crop_factor:
         if i < 0 or i > 1:
-            CONSOLE.print("[bold red]Error: Invalid crop factor. All crops must be in [0,1].")
+            msg = "Error: Invalid crop factor. All crops must be in [0,1]."
+            CONSOLE.print(f"[bold red]{msg}")
             sys.exit(1)
 
     if video_path.is_dir():
-        CONSOLE.print(f"[bold red]Error: Video path is a directory, not a path: {video_path}")
+        msg = "Error: Video path is a directory, not a path: {video_path}"
+        CONSOLE.print(f"[bold red]{msg}")
         sys.exit(1)
     if video_path.exists() is False:
-        CONSOLE.print(f"[bold red]Error: Video does not exist: {video_path}")
+        msg = "Error: Video does not exist: {video_path}"
+        CONSOLE.print(f"[bold red]{msg}")
         sys.exit(1)
 
     with status(msg="Converting video to images...", spinner="bouncingBall", verbose=verbose):
+        send_api_message('preprocessing', {'msg': "Converting video to images...", 'start': True})
         num_frames = get_num_frames_in_video(video_path)
         if num_frames == 0:
             CONSOLE.print(f"[bold red]Error: Video has no frames: {video_path}")
             sys.exit(1)
-        CONSOLE.print("Number of frames in video:", num_frames)
+
+        msg = f"Number of frames in video: {num_frames}"
+        CONSOLE.print(msg)
+        send_api_message('preprocessing', {'msg': msg})
 
         ffmpeg_cmd = f'ffmpeg -i "{video_path}"'
 
@@ -200,7 +208,9 @@ def convert_video_to_images(
             CONSOLE.print("Number of frames to extract:", math.ceil(num_frames / spacing))
             select_cmd = f"thumbnail={spacing},setpts=N/TB,"
         else:
-            CONSOLE.print("[bold red]Can't satisfy requested number of frames. Extracting all frames.")
+            msg = "Can't satisfy requested number of frames. Extracting all frames."
+            CONSOLE.print(msg)
+            send_api_message('preprocessing', {'msg': msg})
             ffmpeg_cmd += " -pix_fmt bgr8"
             select_cmd = ""
 
@@ -216,8 +226,9 @@ def convert_video_to_images(
         summary_log = []
         summary_log.append(f"Starting with {num_frames} video frames")
         summary_log.append(f"We extracted {num_final_frames} images with prefix '{image_prefix}'")
-        CONSOLE.log("[bold green]:tada: Done converting video to images.")
-
+        msg = "Done converting video to images."
+        CONSOLE.log(f"[bold green]:tada: {msg}")
+        send_api_message('preprocessing', {'msg': msg})
         return summary_log, num_final_frames
 
 

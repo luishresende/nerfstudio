@@ -47,6 +47,8 @@ from nerfstudio.models.splatfacto import SplatfactoModel
 from nerfstudio.pipelines.base_pipeline import Pipeline, VanillaPipeline
 from nerfstudio.utils.eval_utils import eval_setup
 from nerfstudio.utils.rich_utils import CONSOLE
+from nerfstudio.utils.socket_api import send_api_message
+from nerfstudio.utils.ply2splat import main as ply_to_splat
 
 
 @dataclass
@@ -540,6 +542,8 @@ class ExportGaussianSplat(Exporter):
                     elif tensor.dtype == np.uint8:
                         ply_file.write(value.tobytes())
 
+            # Adicionar
+
     def main(self) -> None:
         if not self.output_dir.exists():
             self.output_dir.mkdir(parents=True)
@@ -618,6 +622,9 @@ class ExportGaussianSplat(Exporter):
 
         ExportGaussianSplat.write_ply(str(filename), count, map_to_tensors)
 
+        send_api_message({'finished': False, 'msg': "Exported Gaussian Splat to a .ply file"})
+        ply_to_splat(str(filename))
+        send_api_message({'finished': True, 'msg': "Converted .ply file to .splat file"})
 
 Commands = tyro.conf.FlagConversionOff[
     Union[

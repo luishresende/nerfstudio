@@ -20,6 +20,7 @@ from typing import Optional
 from rich.console import Console
 from rich.progress import BarColumn, Progress, ProgressColumn, Task, TaskProgressColumn, TextColumn, TimeRemainingColumn
 from rich.text import Text
+from .socket_api import send_api_message
 
 CONSOLE = Console(width=120)
 

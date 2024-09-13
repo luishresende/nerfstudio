@@ -27,6 +27,7 @@ import requests
 import torch
 from packaging.version import Version
 from rich.progress import track
+from nerfstudio.utils.socket_api import send_api_message
 
 # TODO(1480) use pycolmap instead of colmap_parsing_utils
 # import pycolmap
@@ -134,7 +135,10 @@ def run_colmap(
     with status(msg="[bold yellow]Running COLMAP feature extractor...", spinner="moon", verbose=verbose):
         run_command(feature_extractor_cmd, verbose=verbose)
 
-    CONSOLE.log("[bold green]:tada: Done extracting COLMAP features.")
+    msg = "Running COLMAP feature extractor..."
+    CONSOLE.log(f"[bold green]:tada: {msg}")
+    send_api_message('preprocessing', {'msg': str(msg)})
+
 
     # Feature matching
     feature_matcher_cmd = [
@@ -147,7 +151,9 @@ def run_colmap(
         feature_matcher_cmd.append(f'--VocabTreeMatching.vocab_tree_path "{vocab_tree_filename}"')
     feature_matcher_cmd = " ".join(feature_matcher_cmd)
     with status(msg="[bold yellow]Running COLMAP feature matcher...", spinner="runner", verbose=verbose):
+        send_api_message('preprocessing', {'msg': "Running COLMAP feature matcher..."})
         run_command(feature_matcher_cmd, verbose=verbose)
+    send_api_message('preprocessing', {'msg': "Done matching COLMAP features."})
     CONSOLE.log("[bold green]:tada: Done matching COLMAP features.")
 
     # Bundle adjustment
@@ -169,7 +175,9 @@ def run_colmap(
         spinner="circle",
         verbose=verbose,
     ):
+        send_api_message('preprocessing', {'msg': "Running COLMAP bundle adjustment..."})
         run_command(mapper_cmd, verbose=verbose)
+    send_api_message('preprocessing', {'msg': "Done COLMAP bundle adjustment."})
     CONSOLE.log("[bold green]:tada: Done COLMAP bundle adjustment.")
 
     if refine_intrinsics:
@@ -181,6 +189,7 @@ def run_colmap(
                 "--BundleAdjustment.refine_principal_point 1",
             ]
             run_command(" ".join(bundle_adjuster_cmd), verbose=verbose)
+        send_api_message('preprocessing', {'msg': "Done refining intrinsics."})
         CONSOLE.log("[bold green]:tada: Done refining intrinsics.")
 
 
@@ -653,18 +662,24 @@ def get_matching_summary(num_initial_frames: int, num_matched_frames: int) -> st
     """
     match_ratio = num_matched_frames / num_initial_frames
     if match_ratio == 1:
+        send_api_message('preprocessing', {'msg': "COLMAP found poses for all images, CONGRATS!", 'result': float(f'{num_matched_frames / num_initial_frames * 100:.2f}')})
         return "[bold green]COLMAP found poses for all images, CONGRATS!"
     if match_ratio < 0.4:
+        send_api_message('preprocessing', {'msg': "COLMAP only found poses for a small fraction of the images. This is very low.", 'result': float(f'{num_matched_frames / num_initial_frames * 100:.2f}')})
         result = f"[bold red]COLMAP only found poses for {num_matched_frames / num_initial_frames * 100:.2f}%"
         result += " of the images. This is low.\nThis can be caused by a variety of reasons,"
         result += " such poor scene coverage, blurry images, or large exposure changes."
         return result
     if match_ratio < 0.8:
+        send_api_message('preprocessing', {'msg': "COLMAP only found poses for a fraction of the images. This is not great.", 'result': float(f'{num_matched_frames / num_initial_frames * 100:.2f}')})
         result = f"[bold yellow]COLMAP only found poses for {num_matched_frames / num_initial_frames * 100:.2f}%"
         result += " of the images.\nThis isn't great, but may be ok."
         result += "\nMissing poses can be caused by a variety of reasons, such poor scene coverage, blurry images,"
         result += " or large exposure changes."
         return result
+
+
+
     return f"[bold green]COLMAP found poses for {num_matched_frames / num_initial_frames * 100:.2f}% of the images."
 
 

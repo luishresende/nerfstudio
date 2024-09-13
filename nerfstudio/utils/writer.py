@@ -24,6 +24,7 @@ from abc import abstractmethod
 from pathlib import Path
 from time import time
 from typing import Any, Dict, List, Optional, Union
+import json
 
 import torch
 from jaxtyping import Float
@@ -34,6 +35,8 @@ from nerfstudio.configs import base_config as cfg
 from nerfstudio.utils.decorators import check_main_thread, decorate_all
 from nerfstudio.utils.printing import human_format
 from nerfstudio.utils.rich_utils import CONSOLE
+from .socket_api import send_api_message
+
 
 
 def to8b(x):
@@ -268,6 +271,7 @@ class Writer:
             scalar_dict: dictionary containing all scalar values with key names and quantities
             step: the time step to log
         """
+
         for key, scalar in scalar_dict.items():
             self.write_scalar(name + "/" + key, float(scalar), step)
 
@@ -501,25 +505,39 @@ class LocalWriter:
             latest_map: the most recent dictionary of stats that have been recorded
             padding: type of characters to print to pad open space
         """
+
+
         step = GLOBAL_BUFFER["step"]
         fraction_done = step / GLOBAL_BUFFER["max_iter"]
-        curr_mssg = f"{step} ({fraction_done*100:.02f}%)"
+        data = {}
+
+        progress = fraction_done * 100
+        curr_mssg = f"{step} ({progress:.02f}%)"
         curr_mssg = f"{curr_mssg:<20}"
+
+        data['step'] = step
+        data['progress'] = progress
+
+        print(latest_map)
         for name, v in latest_map.items():
             if name in self.stats_to_track:
                 if "(time)" in name:
                     v = _format_time(v)
+                    data['time'] = v
                 elif "Rays" in name:
                     v = human_format(v)
+                    data['rays'] = v
                 else:
                     v = f"{v:0.4f}"
                 curr_mssg += f"{v:<20} "
+
 
         # update the history buffer
         if self.config.max_log_size:
             if not self.has_printed:
                 cursor_idx = len(self.past_mssgs) - self.banner_len
                 self.has_printed = True
+
             else:
                 cursor_idx = len(self.past_mssgs)
             if len(self.past_mssgs[2:]) - self.banner_len >= self.config.max_log_size:
@@ -530,6 +548,10 @@ class LocalWriter:
             for i, mssg in enumerate(self.past_mssgs):
                 pad_len = len(max(self.past_mssgs, key=len))
                 style = "\x1b[30;42m" if self.banner_len and i >= len(self.past_mssgs) - self.banner_len + 1 else ""
-                print(f"{style}{mssg:{padding}<{pad_len}} \x1b[0m")
+                msg = f"{style}{mssg:{padding}<{pad_len}} \x1b[0m"
+                print(msg)
+
+            send_api_message('train', data)
         else:
+            send_api_message('train', data)
             print(curr_mssg)
